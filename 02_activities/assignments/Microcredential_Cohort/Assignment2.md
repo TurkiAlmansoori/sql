@@ -56,7 +56,7 @@ The store wants to keep customer addresses. Propose two architectures for the CU
 **HINT:** search type 1 vs type 2 slowly changing dimensions. 
 
 ```
-Your answer...
+Type 1 slowly changing dimensions is architecture which overwrites old data with new, type 2 retain changes and keeps old records. For type 1, we would have columns relating to customer address fields like customer_id, customer_st_num, customer_st_name, customer_city, customer_postal_code, etc. with no column or reference to old addresses. For type 2, we could add extra columns for old addresses like old_postal_code, old_address, etc.
 ```
 
 ***
