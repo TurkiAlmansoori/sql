@@ -23,8 +23,12 @@ Edit the appropriate columns -- you're making two edits -- and the NULL rows wil
 All the other rows will remain the same. */
 --QUERY 1
 
-
-
+SELECT 
+product_name || ', ' || 
+COALESCE(product_size, '') || ' (' || 
+COALESCE(product_qty_type, 'unit') || ')' 
+AS product_details
+FROM product;
 
 --END QUERY
 
@@ -41,8 +45,13 @@ HINT: One of these approaches uses ROW_NUMBER() and one uses DENSE_RANK().
 Filter the visits to dates before April 29, 2022. */
 --QUERY 2
 
-
-
+SELECT
+customer_id,
+market_date,
+DENSE_RANK() OVER (PARTITION BY customer_id ORDER BY market_date ASC) AS customer_visits
+FROM customer_purchases
+WHERE market_date < '2022-04-29'
+ORDER BY customer_id, market_date;
 
 --END QUERY
 
@@ -53,8 +62,13 @@ only the customer’s most recent visit.
 HINT: Do not use the previous visit dates filter. */
 --QUERY 3
 
-
-
+SELECT *
+FROM (SELECT customer_id, market_date, 
+	DENSE_RANK() OVER (PARTITION BY customer_id ORDER BY market_date DESC) AS customer_visits
+	FROM customer_purchases)
+	
+WHERE customer_visits = 1
+ORDER BY customer_id, market_date;
 
 --END QUERY
 
@@ -66,8 +80,18 @@ You can make this a running count by including an ORDER BY within the PARTITION 
 Filter the visits to dates before April 29, 2022. */
 --QUERY 4
 
-
-
+SELECT
+customer_id,
+product_id,
+vendor_id,
+market_date,
+quantity,
+cost_to_customer_per_qty,
+transaction_time,
+COUNT(*) OVER (PARTITION BY customer_id, product_id) AS num_times_purchased
+FROM customer_purchases
+WHERE market_date < '2022-04-29'
+ORDER BY customer_id, product_id, market_date;
 
 --END QUERY
 
@@ -85,8 +109,14 @@ Remove any trailing or leading whitespaces. Don't just use a case statement for 
 Hint: you might need to use INSTR(product_name,'-') to find the hyphens. INSTR will help split the column. */
 --QUERY 5
 
-
-
+SELECT
+product_name,
+CASE
+	WHEN INSTR(product_name, '-') > 0
+		THEN TRIM(SUBSTR(product_name, INSTR(product_name, '-') + 1))
+	ELSE NULL
+END AS description
+FROM product;
 
 --END QUERY
 
@@ -94,8 +124,9 @@ Hint: you might need to use INSTR(product_name,'-') to find the hyphens. INSTR w
 /* 2. Filter the query to show any product_size value that contain a number with REGEXP. */
 --QUERY 6
 
-
-
+SELECT *
+FROM product
+WHERE product_size REGEXP '[0-9]';
 
 --END QUERY
 
@@ -111,8 +142,37 @@ HINT: There are a possibly a few ways to do this query, but if you're struggling
 with a UNION binding them. */
 --QUERY 7
 
+WITH sales_by_date AS (
+	SELECT
+		market_date,
+		SUM(quantity * cost_to_customer_per_qty) AS total_sales
+	FROM customer_purchases
+	GROUP BY market_date
+), --first group total purchases by market dates
+ranked_sales AS (
+	SELECT
+		market_date,
+		total_sales,
+		ROW_NUMBER() OVER (ORDER BY total_sales DESC) AS highest_sales_rank,
+		ROW_NUMBER() OVER (ORDER BY total_sales ASC) AS lowest_sales_rank
+	FROM sales_by_date
+)
 
+SELECT
+	market_date,
+	total_sales,
+	'Highest Sales' AS sales_type
+FROM ranked_sales
+WHERE highest_sales_rank = 1
 
+UNION
+
+SELECT
+	market_date,
+	total_sales,
+	'Lowest Sales' AS sales_type
+FROM ranked_sales
+WHERE lowest_sales_rank = 1;
 
 --END QUERY
 
@@ -132,7 +192,30 @@ How many customers are there (y).
 Before your final group by you should have the product of those two queries (x*y).  */
 --QUERY 8
 
+SELECT
+	vendor_product.vendor_name,
+	vendor_product.product_name,
+	SUM(5 * vendor_product.market_price) AS total_possible_revenue
+FROM (
+	SELECT DISTINCT
+		vendor.vendor_name,
+		product.product_name,
+		vendor_inventory.market_price
+	FROM vendor_inventory
+	INNER JOIN vendor
+		ON vendor.vendor_id = vendor_inventory.vendor_id
+	INNER JOIN product
+		ON product.product_id = vendor_inventory.product_id
+) AS vendor_product
 
+CROSS JOIN customer
+
+GROUP BY
+	vendor_product.vendor_name,
+	vendor_product.product_name
+ORDER BY
+	vendor_product.vendor_name,
+	vendor_product.product_name;
 
 
 --END QUERY
